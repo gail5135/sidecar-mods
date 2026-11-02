@@ -11,9 +11,9 @@ const BARE_COMMIT = /^\s*(커밋|commit)\s*[.!]?\s*$/i
 const BARE_PUSH = /^\s*(푸시|push)\s*[.!]?\s*$/i
 
 const COMMIT_ORDER =
-  /커밋\s*(?:을|를|도|까지|하고|후)?\s*(?:좀\s*)?(?:해|하자|하세요|진행|부탁|올려|푸시)|(?:^|\s)(?:please\s+)?commit\s+(?:this|it|please|now|and\s+push)|^\s*(?:please\s+)?commit\b/i
+  /커밋\s*(?:을|를|도|까지|하고|후)?\s*(?:좀\s*)?(?:해|하셈|하자|하세요|진행|부탁|올려|푸시)|(?:^|\s)(?:please\s+)?commit\s+(?:this|it|please|now|and\s+push)|^\s*(?:please\s+)?commit\b/i
 const PUSH_ORDER =
-  /푸시\s*(?:을|를|도|까지)?\s*(?:좀\s*)?(?:해|하자|하세요|진행|부탁)|올려\s*(?:줘|주세요|달라)|(?:^|\s)(?:please\s+)?push\s+(?:this|it|please|now)|^\s*(?:please\s+)?push\b|commit\s+and\s+push/i
+  /푸시\s*(?:을|를|도|까지)?\s*(?:좀\s*)?(?:해|하셈|하자|하세요|진행|부탁)|올려\s*(?:줘|주세요|달라)|(?:^|\s)(?:please\s+)?push\s+(?:this|it|please|now)|^\s*(?:please\s+)?push\b|commit\s+and\s+push/i
 
 const USER_ORIGINS = new Set(['composer', 'bridge', 'sdk'])
 
