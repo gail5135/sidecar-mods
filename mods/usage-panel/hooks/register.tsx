@@ -7,8 +7,14 @@ const PANE = 'usage-panel'
 const TITLE = '사용량'
 const REFRESH_MS = 15_000
 const AGENT_REFRESH_MS = 2_000
-const BORDER_COLOR = '#4b5563'
+// 카드마다 색을 하나씩 정해 테두리, 제목, 핵심 값에 같이 쓴다. 사용량 막대의 단계 색과 겹치지 않게 고른다.
+const SERVER_COLOR = '#2dd4bf'
+const USAGE_COLOR = '#a78bfa'
+const AGENT_COLOR = '#fbbf24'
+const COMMIT_COLOR = '#f472b6'
 const QUESTION_COLOR = '#38bdf8'
+// 달러 지폐의 녹색. 사용량 막대의 초록(#22c55e)보다 탁해서 구분된다.
+const COST_COLOR = '#85bb65'
 
 // 필드가 바뀌면 태그를 바꾼다: 이전 버전이 저장한 값은 reload 후에도 남는다.
 const snapshot = atom({ plugin: 'usage-panel', key: 'snapshot' } as const, null, {
@@ -71,7 +77,8 @@ const describeDevServer = async ($: EngineInterface) => {
   const listener = await $.process.run(['lsof', '-nP', '-t', `-iTCP:${DEV_PORT}`, '-sTCP:LISTEN'])
   const pid = listener.stdout.trim().split('\n')[0]
 
-  if (!pid) return `${DEV_PORT} 비어 있음`
+  // 서버를 띄우지 않은 상태가 기본이므로 따로 알리지 않는다.
+  if (!pid) return ''
 
   const ps = await $.process.run(['ps', '-o', 'command=', '-p', pid])
   const command = ps.stdout.trim()
@@ -227,6 +234,14 @@ const formatModel = (model: string) => {
   return `${family.charAt(0).toUpperCase()}${family.slice(1)} ${major}.${minor}`
 }
 
+// 첫 모델 요청 전에는 turn.step이 없으므로, 엔진이 셸에 넘기는 현재 effort를 먼저 읽고 없으면 설정값을 쓴다.
+const refreshEffort = async ($: EngineInterface) => {
+  const fromEnv = await $.env.get('CLAUDE_EFFORT').catch(() => undefined)
+  const fromSettings = fromEnv ? undefined : await $.settings.read({ key: 'effortLevel' }).catch(() => undefined)
+  const effort = fromEnv || (typeof fromSettings === 'string' ? fromSettings : '')
+  if (effort) await update($, effortLevel, () => effort)
+}
+
 const refreshModel = async ($: EngineInterface) => {
   const model = await $.session.model().catch(() => '')
   await update($, modelName, () => formatModel(model))
@@ -242,6 +257,15 @@ const levelColor = (percent: number) => {
   return '#3b82f6'
 }
 
+// 사용량 막대와 같은 색을 낮은 단계부터 파랑 → 초록 → 노랑 → 주황 → 빨강 순으로 쓴다.
+const EFFORT_COLORS: Record<string, string> = {
+  low: '#3b82f6',
+  medium: '#22c55e',
+  high: '#eab308',
+  xhigh: '#f97316',
+  max: '#ef4444',
+}
+
 export const register: Register = on => {
   let isTicking = false
 
@@ -254,6 +278,7 @@ export const register: Register = on => {
     await refreshCommits($)
     await refreshAgents($)
     await refreshModel($)
+    await refreshEffort($)
     void $.ui.open({ id: PANE, title: TITLE })
 
     // 초기화까지 남은 시간은 응답이 없어도 줄어들므로 주기적으로 다시 읽는다.
@@ -365,17 +390,24 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column">
-        {server !== '' && (
-          <Box flexDirection="column" borderStyle="round" borderColor={BORDER_COLOR} paddingX={1}>
-            <Text>{server}</Text>
-            {branch !== '' && <Text>{`현재 브랜치: ${branch}`}</Text>}
+        {(server !== '' || branch !== '') && (
+          <Box flexDirection="column" borderStyle="round" borderColor={SERVER_COLOR} paddingX={1}>
+            {server !== '' && <Text color={SERVER_COLOR}>{server}</Text>}
+            {branch !== '' && (
+              <Text>
+                <Text dimColor>현재 브랜치:</Text> <Text color={SERVER_COLOR}>{branch}</Text>
+              </Text>
+            )}
           </Box>
         )}
-        <Box flexDirection="column" borderStyle="round" borderColor={BORDER_COLOR} paddingX={1}>
+        <Box flexDirection="column" borderStyle="round" borderColor={USAGE_COLOR} paddingX={1}>
           {model !== '' && (
             <Box flexDirection="row" gap={1}>
-              <Text bold>{model}</Text>
-              {effort !== '' && <Text dimColor>{effort}</Text>}
+              <Text bold color={USAGE_COLOR}>
+                {model}
+              </Text>
+              {effort !== '' &&
+                (EFFORT_COLORS[effort] ? <Text color={EFFORT_COLORS[effort]}>{effort}</Text> : <Text dimColor>{effort}</Text>)}
             </Box>
           )}
           <Box flexDirection="row" gap={1}>
@@ -417,10 +449,12 @@ export const register: Register = on => {
           {data.rateLimits.length === 0 && (
             <Text dimColor>한도 정보가 아직 없습니다. 구독 계정에서 응답을 받으면 표시됩니다.</Text>
           )}
-          {data.costUsd !== undefined && <Text bold>{`$${data.costUsd.toFixed(2)}`}</Text>}
+          {data.costUsd !== undefined && (
+            <Text bold color={COST_COLOR}>{`$${data.costUsd.toFixed(2)}`}</Text>
+          )}
         </Box>
-        <Box flexDirection="column" borderStyle="round" borderColor={BORDER_COLOR} paddingX={1}>
-          <Text bold>{`Subagent (실행 중 ${activeAgents.length})`}</Text>
+        <Box flexDirection="column" borderStyle="round" borderColor={AGENT_COLOR} paddingX={1}>
+          <Text bold color={AGENT_COLOR}>{`Subagent (실행 중 ${activeAgents.length})`}</Text>
           {agentRows.length === 0 && <Text dimColor>실행한 subagent가 없습니다.</Text>}
           {[...activeAgents, ...finishedAgents].map(agent => {
             const isViewed = agent.id === viewedAgentId
@@ -441,7 +475,7 @@ export const register: Register = on => {
                     })
                 }}
               >
-                <Text bold={isViewed} color={isViewed ? QUESTION_COLOR : undefined} dimColor={!isViewed && !isActive}>
+                <Text bold={isViewed} color={isViewed || isActive ? AGENT_COLOR : undefined} dimColor={!isViewed && !isActive}>
                   {label}
                 </Text>
               </Button>
@@ -457,18 +491,23 @@ export const register: Register = on => {
                 })
               }}
             >
-              <Text color={QUESTION_COLOR}>◀◀◀ 메인으로 돌아가기</Text>
+              <Text color={AGENT_COLOR}>◀◀◀ 메인으로 돌아가기</Text>
             </Button>
           )}
         </Box>
-        <Box flexDirection="column" gap={1} borderStyle="round" borderColor={BORDER_COLOR} paddingX={1}>
-          <Text bold>커밋 로그</Text>
+        <Box flexDirection="column" gap={1} borderStyle="round" borderColor={COMMIT_COLOR} paddingX={1}>
+          <Text bold color={COMMIT_COLOR}>
+            커밋 로그
+          </Text>
           {groups.length === 0 && <Text dimColor>이번 세션의 커밋이 없습니다.</Text>}
           {groups.map(group => (
             <Box flexDirection="column">
-              <Text>{clip(group.branch, width)}</Text>
+              <Text bold>{clip(group.branch, width)}</Text>
               {group.commits.map(commit => (
-                <Text dimColor>{clip(`${commit.hash} ${commit.subject}`, width)}</Text>
+                <Text>
+                  <Text color={COMMIT_COLOR}>{commit.hash}</Text>{' '}
+                  <Text dimColor>{clip(commit.subject, width - commit.hash.length - 1)}</Text>
+                </Text>
               ))}
             </Box>
           ))}

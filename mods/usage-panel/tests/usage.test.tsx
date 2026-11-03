@@ -68,9 +68,24 @@ const running = (ps: string, lsof = '95569\n') => (_: unknown, e: { argv: readon
 const CASES: [ps: string, lsof: string, expected: string][] = [
   ['node node_modules/.bin/vite --host 0.0.0.0', '95569\n', 'proxy dev (5173)'],
   ['node vite --proxyType=cloud --rootDept=fasoo', '95569\n', 'proxy cloud:fasoo (5173)'],
-  ['', '', '5173 비어 있음'],
   ['python -m http.server', '95569\n', '5173 다른 프로세스가 사용 중 (pid 95569)'],
 ]
+
+test('개발 서버가 없으면 서버 줄을 비우고 브랜치만 표시한다', async ($, on) => {
+  on('clock.now', () => ({ value: NOW }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('command.register', () => ({ value: { command: 'usage-panel' } }))
+  on('session.usage', () => ({ value: { startedAt: NOW, context: { window: 200_000 }, rateLimits: [] } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('process.run', running('', ''))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /5173/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: '현재 브랜치: feature/1234-usage' })).toBeDefined()
+  await ui.unmount()
+})
 
 for (const [ps, lsof, expected] of CASES) {
   test(`개발 서버 상태를 패널에 표시한다: ${expected}`, async ($, on) => {
@@ -407,8 +422,28 @@ test('메인 루프의 effort를 모델 옆에 표시하고 subagent의 값은 �
   for await (const _ of $.turn.step({ ...step, effort: 'low', agentId: 'a1' })) void _
 
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: 'xhigh' })).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: 'xhigh' }))?.props.color).toBe('#f97316')
   expect(await ui.find({ type: 'Text', text: 'low' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('첫 응답 전에도 현재 effort를 모델 옆에 표시한다', async ($, on) => {
+  on('clock.now', () => ({ value: NOW }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('command.register', () => ({ value: { command: 'usage-panel' } }))
+  on('session.usage', () => ({ value: { startedAt: NOW, context: { window: 1_000_000 }, rateLimits: [] } }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('process.run', () => ({
+    value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+  }))
+  on('clock.every', () => ({ value: undefined }) as never)
+  on('env.get', () => ({ value: 'medium' }))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: 'medium' }))?.props.color).toBe('#22c55e')
   await ui.unmount()
 })
 
