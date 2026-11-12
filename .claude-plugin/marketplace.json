@@ -13,16 +13,6 @@
       "name": "git-guard",
       "source": "./mods/git-guard",
       "description": "명시적인 지시가 없는 git commit과 git push를 차단합니다"
-    },
-    {
-      "name": "protected-files-guard",
-      "source": "./mods/protected-files-guard",
-      "description": "Fireside 프론트의 생성 파일, SVG 원본, 스프라이트 생성기 수정과 react-mentions 설치를 차단합니다"
-    },
-    {
-      "name": "verify-checklist",
-      "source": "./mods/verify-checklist",
-      "description": "변경된 프론트 파일에 필요한 검증 명령과 실행 결과를 패널에 표시합니다"
     }
   ]
 }
